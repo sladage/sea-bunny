@@ -24,19 +24,43 @@ where
     listener_id_counter: usize,
 }
 
-pub struct Event<T>
+fn listen<T, F>(event_core: Arc<Mutex<EventCore<T>>>, _callback: F) -> EventHandle<T>
+where
+    F: Fn(T) + Send + Sync + 'static,
+    T: Clone + Send + Sync + 'static,
+{
+    // Subscribe to the event with the provided callback
+    let listener_id: usize;
+
+    {
+        let mut core = event_core.lock().unwrap();
+        listener_id = core.listener_id_counter;
+        core.listener_id_counter += 1;
+        core.listeners.push(EventListener {
+            id: listener_id,
+            callback: Box::new(_callback),
+        });
+    }
+
+    EventHandle {
+        id: listener_id,
+        event: event_core,
+    }
+}
+
+pub struct EventSource<T>
 where
     T: Clone + Send + Sync + 'static,
 {
     core: Arc<Mutex<EventCore<T>>>,
 }
 
-impl<T> Event<T>
+impl<T> EventSource<T>
 where
     T: Clone + Send + Sync + 'static,
 {
     pub fn new() -> Self {
-        Event {
+        EventSource {
             core: Arc::new(Mutex::new(EventCore {
                 listeners: Vec::new(),
                 listener_id_counter: 0,
@@ -52,23 +76,36 @@ where
         }
     }
 
+    pub fn listen<F>(&self, callback: F) -> EventHandle<T>
+    where
+        F: Fn(T) + Send + Sync + 'static,
+    {
+        listen(Arc::clone(&self.core), callback)
+    }
+
+    pub fn event(&self) -> Event<T> {
+        Event {
+            core: Arc::clone(&self.core),
+        }
+    }
+}
+
+pub struct Event<T>
+where
+    T: Clone + Send + Sync + 'static,
+{
+    core: Arc<Mutex<EventCore<T>>>,
+}
+
+impl<T> Event<T>
+where
+    T: Clone + Send + Sync + 'static,
+{
     pub fn listen<F>(&self, _callback: F) -> EventHandle<T>
     where
         F: Fn(T) + Send + Sync + 'static,
     {
-        // Subscribe to the event with the provided callback
-        let mut core = self.core.lock().unwrap();
-        let listener_id = core.listener_id_counter;
-        core.listener_id_counter += 1;
-        core.listeners.push(EventListener {
-            id: listener_id,
-            callback: Box::new(_callback),
-        });
-
-        EventHandle {
-            id: listener_id,
-            event: Arc::clone(&self.core),
-        }
+        listen(Arc::clone(&self.core), _callback)
     }
 }
 
@@ -83,7 +120,7 @@ where
     }
 }
 
-impl<T> Default for Event<T>
+impl<T> Default for EventSource<T>
 where
     T: Clone + Send + Sync + 'static,
 {
@@ -100,6 +137,17 @@ where
         Event {
             core: Arc::clone(&self.core),
         }
+    }
+}
+
+impl<T> std::fmt::Debug for EventSource<T>
+where
+    T: Clone + Send + Sync + 'static,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Event")
+            .field("listeners", &self.core.lock().unwrap().listeners.len())
+            .finish()
     }
 }
 

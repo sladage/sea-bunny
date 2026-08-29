@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::events::{Event, EventHandle};
+use crate::events::{EventHandle, EventSource};
 use event_derive::eventful;
 use reqwest::StatusCode;
 use tokio::task;
@@ -12,6 +12,11 @@ use crate::{
     },
     models::config::config,
 };
+
+pub enum AuthState {
+    NeedsAuthentication,
+    Authenticated,
+}
 
 #[derive(Debug, Clone)]
 pub enum OnLogin {
@@ -43,7 +48,7 @@ struct NCClientInternal {
     client: reqwest::Client,
     ncserver: Url,
     auth_request_token: tokio::sync::Mutex<Option<LoginFlowV2StartResponse>>,
-    credentials: tokio::sync::Mutex<Option<LoginFlowV2Credentials>>,
+    credentials: tokio::sync::Mutex<Option<(String, String)>>, // (login_name, app_password)
 
     #[event]
     on_login: OnLogin,
@@ -62,7 +67,7 @@ impl NCClient {
             ncserver,
             auth_request_token: tokio::sync::Mutex::new(None),
             credentials: tokio::sync::Mutex::new(None),
-            on_login: Event::new(),
+            on_login: EventSource::new(),
         };
 
         let internal = Arc::new(nc_client);
@@ -74,9 +79,29 @@ impl NCClient {
         Self { internal, worker }
     }
 
-    // auth
+    /// Authenticate the user. If credentials are already stored in the keyring, verify them.
+    /// If not, initiate the Login Flow v2 process and open the login URL in the user's default browser.
+    pub async fn authenticate(&self) -> Result<AuthState, LoginError> {
+        // Try to load credentials from the keyring.
+        if !self.internal.load_credentials().await {
+            self.request_auth().await?;
+            return Ok(AuthState::NeedsAuthentication);
+        }
 
-    pub async fn request_auth(&self) -> Result<(), LoginError> {
+        // we have credentials, but let's verify them by making a simple request to the Nextcloud server.
+        match self.verify_credentials().await {
+            Ok(true) => Ok(AuthState::Authenticated),
+            Ok(false) => {
+                // Credentials are invalid; clear them and request authentication.
+                *self.internal.credentials.lock().await = None;
+                self.request_auth().await?;
+                Ok(AuthState::NeedsAuthentication)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn request_auth(&self) -> Result<(), LoginError> {
         let auth_token = self.internal.get_auth_token().await?;
 
         // Open the login URL in the user's default browser.
@@ -91,13 +116,49 @@ impl NCClient {
         Ok(())
     }
 
-    pub async fn get<T>(&self, url: &str) -> Result<T, reqwest::Error>
+    async fn nc_request_builder(&self, url: &str) -> Result<reqwest::RequestBuilder, LoginError> {
+        let credentials = self.internal.credentials.lock().await;
+        let (username, password) = match &*credentials {
+            Some((u, p)) => (u.clone(), p.clone()),
+            None => {
+                return Err(LoginError::Pending);
+            }
+        };
+        let builder = self
+            .internal
+            .client
+            .get(self.internal.ncserver.join(url).unwrap())
+            .basic_auth(username, Some(password))
+            .header("Accept", "application/json")
+            .header("User-Agent", "sea-bunny/0.1")
+            .header("OCS-APIRequest", "true");
+        Ok(builder)
+    }
+
+    /// Make a GET request to the Nextcloud server and deserialize the JSON response into the specified type.
+    pub async fn get<T>(&self, url: &str) -> anyhow::Result<T>
     where
         T: serde::de::DeserializeOwned,
     {
-        let response = self.internal.client.get(url).send().await?;
+        let response = self.nc_request_builder(url).await?.send().await?;
         let body = response.json::<T>().await?;
         Ok(body)
+    }
+
+    async fn verify_credentials(&self) -> Result<bool, LoginError> {
+        let response = self
+            .nc_request_builder("ocs/v2.php/cloud/user")
+            .await?
+            .send()
+            .await?;
+        match response.status() {
+            StatusCode::OK => Ok(true),
+            StatusCode::UNAUTHORIZED => Ok(false),
+            _ => {
+                response.error_for_status()?;
+                unreachable!()
+            }
+        }
     }
 }
 
@@ -144,6 +205,33 @@ impl NCClientInternal {
         }
     }
 
+    async fn load_credentials(&self) -> bool {
+        let keyring = match keyring::Entry::new("sea-bunny", "nextcloud") {
+            Ok(k) => k,
+            Err(_) => return false,
+        };
+
+        let password = match keyring.get_password() {
+            Ok(p) => p,
+            Err(_) => return false,
+        };
+
+        let parts: Vec<&str> = password.splitn(2, ':').collect();
+        if parts.len() != 2 {
+            return false;
+        }
+
+        let login_name = parts[0].to_string();
+        let app_password = parts[1].to_string();
+
+        self.credentials
+            .lock()
+            .await
+            .replace((login_name, app_password));
+
+        true
+    }
+
     async fn save_credentials(
         &self,
         credentials: LoginFlowV2Credentials,
@@ -155,7 +243,10 @@ impl NCClientInternal {
         keyring
             .set_password(&password)
             .map_err(LoginError::FailedToSaveCredentials)?;
-        self.credentials.lock().await.replace(credentials);
+        self.credentials.lock().await.replace((
+            credentials.login_name.clone(),
+            credentials.app_password.clone(),
+        ));
         Ok(())
     }
 }

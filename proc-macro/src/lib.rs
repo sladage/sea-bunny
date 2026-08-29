@@ -43,7 +43,7 @@ pub fn eventful(args: TokenStream, input: TokenStream) -> TokenStream {
         //     on_login: Event<OnLogin>
         //
         field.ty = parse_quote! {
-            Event<#event_ty>
+            EventSource<#event_ty>
         };
 
         if let Some(internal_field_name) = &internal_field_name {

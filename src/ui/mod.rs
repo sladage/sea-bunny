@@ -1,7 +1,13 @@
+use crate::{app_context::AppContext, events::Event};
+
 slint::include_modules!();
 
-pub fn run_ui() {
+pub fn start_ui(ctx: AppContext) {
     let a = AppWindow::new().unwrap();
     a.show();
-    slint::run_event_loop();
+}
+
+pub fn start_ui_first_run(on_done_setup: Event<()>) {
+    let a = AppWindow::new().unwrap();
+    a.show();
 }
