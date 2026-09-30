@@ -1,13 +1,11 @@
 use crate::{
     app_context::AppContext,
-    events::EventSource,
     models::config::{Config, config},
     services::ncclient::NCClient,
 };
 
 mod app_context;
 mod dto;
-mod events;
 mod models;
 mod services;
 mod ui;
@@ -16,24 +14,23 @@ fn main() -> anyhow::Result<()> {
     Config::init();
 
     if config().nextcloud_server.is_none() {
-        let on_done_setup: EventSource<()> = EventSource::new();
-
-        on_done_setup.listen(|_| {
-            run_app();
-        });
-
-        ui::start_ui_first_run(on_done_setup.event());
+        ui::start_ui_first_run(&run_app)?;
     } else {
-        run_app();
+        drop(slint::spawn_local(async {
+            run_app().await.unwrap();
+        }));
     }
 
-    slint::run_event_loop()?;
+    slint::run_event_loop_until_quit()?;
     Ok(())
 }
 
-fn run_app() {
+async fn run_app() -> anyhow::Result<()> {
     let ctx = AppContext {
-        client: NCClient::new(config().nextcloud_server.unwrap()),
+        client: NCClient::new(config().nextcloud_server.unwrap())
+            .await
+            .expect("Unable to create NCClient."),
     };
-    ui::start_ui(ctx);
+    ui::start_ui(ctx)?;
+    Ok(())
 }

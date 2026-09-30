@@ -4,20 +4,23 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-event-derive = { path = "proc-macro" }
-slint = { version = "1.17", features = ["default", "serde"] }
+eventful-rs = { git = "https://github.com/DreamLogics/eventful-rs", features = [
+    "tokio",
+    "slint",
+] }
+slint = { version = "1.18", features = ["default", "serde"] }
 anyhow = "1.0"
 serde = { version = "1.0.229", features = ["derive", "std"] }
-reqwest = { version = "0.13.4", features = ["json", "multipart", "form"] }
+reqwest = { version = "0.13", features = ["json", "multipart", "form"] }
 tokio = { version = "1.53.1", features = ["full"] }
-keyring = { version = "4.1.6", features = ["v1"] }
-toml = { version = "1.1.4", features = ["serde"] }
+keyring = { version = "4.2", features = ["v1"] }
+toml = { version = "1.1", features = ["serde"] }
 directories = "6.0.0"
-url = { version = "2.4", features = ["serde"] }
-thiserror = "2.0.20"
+url = { version = "2.5", features = ["serde"] }
+thiserror = "2.0"
 tracing = "0.1.44"
 tracing-subscriber = "0.3.23"
-open = { version = "5.4.2" }
+open = { version = "5.4" }
 
 [build-dependencies]
-slint-build = "1.17"
+slint-build = "1.18"

@@ -1,0 +1,71 @@
+import {
+    Button,
+    HorizontalBox,
+    VerticalBox,
+    StyleMetrics,
+    LineEdit,
+    Palette,
+} from "std-widgets.slint";
+export component FirstTimeSetupWindow inherits Window {
+    in property <bool> has-error: false;
+    in property <string> message: @tr("First time setup");
+
+    width: 400px;
+    height: 190px;
+    title: @tr("First Time Setup");
+
+    callback connect(server: string);
+
+    VerticalLayout {
+        HorizontalBox {
+            Text {
+                text: @tr("Welcome to Sea Bunny!");
+                font-size: 20px;
+                font-weight: FontWeight.bold;
+                horizontal-alignment: center;
+            }
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+        }
+
+        VerticalBox {
+
+            HorizontalBox {
+                Text {
+                    text: message;
+                    horizontal-alignment: center;
+                    color: has-error ? Colors.red : Palette.foreground.transparentize(0.4);
+                }
+            }
+
+            GridLayout {
+                spacing: StyleMetrics.layout-spacing;
+
+                Row {
+                    Text {
+                        text: @tr("Nextcloud server:");
+                        vertical-alignment: TextVerticalAlignment.center;
+                    }
+
+                    server-input := LineEdit {
+                        placeholder-text: @tr("https://cloud.example.com");
+                    }
+                }
+            }
+        }
+
+        HorizontalBox {
+            alignment: LayoutAlignment.center;
+
+            Button {
+                text: @tr("Connect");
+                primary: true;
+                clicked => {
+                    root.connect(server-input.text);
+                }
+            }
+        }
+    }
+}
