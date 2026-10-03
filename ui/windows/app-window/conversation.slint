@@ -1,0 +1,86 @@
+import { ListView, HorizontalBox, LineEdit, Palette } from "std-widgets.slint";
+import { ToolButton, ToolButton } from "../../components/tool-button.slint";
+import { UIConversationItem } from "../../models/conversation-item.slint";
+import { UIChatEntryItem } from "../../models/chat-entry-item.slint";
+
+component ChatEntry inherits Rectangle {
+    in property <UIChatEntryItem> item;
+
+    HorizontalBox {
+        Rectangle {
+            Image { }
+        }
+    }
+}
+
+export component ConversationView inherits Rectangle {
+    in property <UIConversationItem> conversation;
+    in property <[UIChatEntryItem]> items;
+
+    VerticalLayout {
+        Rectangle {
+            HorizontalBox {
+                cross-axis-alignment: CrossAxisAlignment.center;
+
+                Rectangle {
+                    width: 24px;
+                    height: self.width;
+                    border-radius: self.width / 2;
+                    background: Palette.foreground.transparentize(0.9);
+
+                    Image {
+                        source: conversation.avatar;
+                        width: parent.width;
+                        height: parent.height;
+                    }
+                }
+
+                Text {
+                    text: conversation.name;
+                    vertical-alignment: TextVerticalAlignment.center;
+                    horizontal-stretch: 1;
+                }
+
+                LineEdit {
+                    placeholder-text: @tr("Search");
+                    input-type: InputType.search;
+                    font-size: 12px;
+                }
+            }
+        }
+
+        Rectangle {
+            height: 1px;
+            background: Palette.border;
+        }
+
+        ListView { }
+
+        Rectangle {
+            height: 1px;
+            background: Palette.border;
+        }
+
+        Rectangle {
+            HorizontalBox {
+                ToolButton {
+                    icon: @image-url("../../assets/ic_fluent_add_24_filled.svg");
+                }
+
+                LineEdit { }
+
+                ToolButton {
+                    icon: @image-url("../../assets/ic_fluent_emoji_24_filled.svg");
+                }
+
+                ToolButton {
+                    icon: @image-url("../../assets/ic_fluent_more_horizontal_24_filled.svg");
+                }
+
+                ToolButton {
+                    icon: @image-url("../../assets/ic_fluent_mic_24_filled.svg");
+                }
+            }
+        }
+    }
+}

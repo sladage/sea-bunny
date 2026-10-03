@@ -1,0 +1,28 @@
+import { Palette } from "std-widgets.slint";
+export component ToolButton inherits Rectangle {
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+
+    in property <image> icon;
+
+    callback clicked();
+
+    states [
+        hover when touch-area.has-hover: {
+            root.background: Palette.foreground.transparentize(0.9);
+        }
+    ]
+
+    Image {
+        source: root.icon;
+        width: 24px;
+        height: 24px;
+    }
+
+    touch-area := TouchArea {
+        clicked => {
+            root.clicked();
+        }
+    }
+}
