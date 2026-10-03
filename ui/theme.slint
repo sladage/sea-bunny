@@ -1,0 +1,8 @@
+import { Palette } from "std-widgets.slint";
+
+export global SeaBunnyTheme {
+    private property <bool> is-dark: Palette.color-scheme == ColorScheme.dark;
+
+    out property <brush> accent-background: is-dark ? #02a4b1 : #014f64;
+    out property <brush> accent-foreground: Palette.accent-foreground;
+}

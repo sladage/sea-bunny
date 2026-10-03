@@ -1,0 +1,223 @@
+import { Palette } from "std-widgets.slint";
+import { SeaBunnyTheme } from "../theme.slint";
+
+
+export component LineEdit {
+    in property <string> placeholder-text;
+    in property <InputType> input-type: InputType.text;
+    in property <bool> read-only <=> text-input.read-only;
+    in property <length> font-size <=> text-input.font-size;
+    in property <string> font-family <=> text-input.font-family;
+    in property <bool> font-italic <=> text-input.font-italic;
+    in-out property <string> text <=> text-input.text;
+    in property <bool> enabled <=> text-input.enabled;
+    out property <bool> has-focus: text-input.has-focus;
+
+    in property <brush> placeholder-color;
+    in property <int> font-weight <=> text-input.font-weight;
+    in property <brush> text-color;
+    in property <color> selection-background-color <=> text-input.selection-background-color;
+    in property <color> selection-foreground-color <=> text-input.selection-foreground-color;
+    in property <length> margin;
+
+    // When true, the password input shows as plain text.
+    // Cleared automatically on focus loss.
+    in-out property <bool> password-revealed: false;
+    in property <TextHorizontalAlignment> horizontal-alignment <=> text-input.horizontal-alignment;
+
+    changed has-focus => {
+        if !self.has-focus {
+            self.password-revealed = false;
+        }
+    }
+
+    callback accepted(text: string);
+    callback edited(text: string);
+    callback key-pressed(event: KeyEvent) -> EventResult;
+    callback key-released(event: KeyEvent) -> EventResult;
+
+    public function set-selection-offsets(anchor: int, focus: int) {
+        text-input.set-selection-offsets(anchor, focus);
+    }
+
+    public function select-all() {
+        text-input.select-all();
+    }
+
+    public function clear-selection() {
+        text-input.clear-selection();
+    }
+
+    public function cut() {
+        text-input.cut();
+    }
+
+    public function copy() {
+        text-input.copy();
+    }
+
+    public function paste() {
+        text-input.paste();
+    }
+
+    public function undo() {
+        text-input.undo();
+    }
+
+    public function redo() {
+        text-input.redo();
+    }
+
+    accessible-role: AccessibleRole.text-input;
+    accessible-enabled: root.enabled;
+    accessible-value <=> text;
+    accessible-placeholder-text: placeholder-text;
+    accessible-read-only: root.read-only;
+    accessible-action-set-value(v) => { text = v; edited(v); }
+    // accessible-action-set-selection-offsets(anchor, focus) => { base.set-selection-offsets(anchor, focus); }
+
+    vertical-stretch: 0;
+    horizontal-stretch: 1;
+    min-width: max(160px, layout.min-width);
+    min-height: max(32px, layout.min-height);
+    forward-focus: text-input;
+
+    ContextMenuArea {
+        enabled: root.enabled;
+        Menu {
+            if !root.read-only: MenuItem {
+                title: @tr("Undo");
+                activated => {
+                    text-input.undo();
+                }
+            }
+
+            if !root.read-only: MenuItem {
+                title: @tr("Redo");
+                activated => {
+                    text-input.redo();
+                }
+            }
+
+            if !root.read-only: MenuSeparator { }
+
+            if !root.read-only: MenuItem {
+                title: @tr("Cut");
+                activated => {
+                    text-input.cut();
+                }
+            }
+
+            MenuItem {
+                title: @tr("Copy");
+                enabled: !root.text.is-empty;
+                activated => {
+                    text-input.copy();
+                }
+            }
+
+            if !root.read-only: MenuItem {
+                title: @tr("Paste");
+                activated => {
+                    text-input.paste();
+                }
+            }
+
+            MenuItem {
+                title: @tr("Select All");
+                enabled: !root.text.is-empty;
+                activated => {
+                    text-input.select-all();
+                }
+            }
+        }
+    }
+
+    states [
+        disabled when !root.enabled: {
+            background.background: Palette.background;
+            text-input.color: Palette.foreground.transparentize(0.5);
+            text-input.selection-foreground-color: Palette.foreground.transparentize(0.5);
+        }
+        focused when root.has-focus: {
+            background.background: Palette.background;
+            focus-border.background: SeaBunnyTheme.accent-background;
+        }
+    ]
+
+    background := Rectangle {
+        background: Palette.control-background;
+        border-radius: 4px;
+        clip: true;
+        border-width: 1px;
+        border-color: Palette.border;
+
+        layout := HorizontalLayout {
+            padding-top: 4px;
+            padding-bottom: self.padding-top;
+            padding-left: 8px;
+            padding-right: self.padding-left;
+
+            Rectangle {
+                //height: 32px;
+                if root.text.is-empty: Text {
+                    x: 0px;
+                    y: 0px;
+                    height: parent.height;
+                    text: root.placeholder-text;
+                    vertical-alignment: TextVerticalAlignment.center;
+                    color: Palette.foreground.transparentize(0.5);
+                }
+
+                text-input := TextInput {
+                    property <length> computed-x;
+
+                    x: min(0px, max(parent.width - self.width - self.text-cursor-width, self.computed-x));
+                    width: max(parent.width - self.text-cursor-width, self.preferred-width);
+                    height: 100%;
+                    vertical-alignment: center;
+                    single-line: true;
+                    input-type: root.password-revealed ? InputType.text : root.input-type;
+                                // Disable TextInput's built-in accessibility support as the widget takes care of that.
+                                accessible-role: none;
+
+                    cursor-position-changed(cursor-position) => {
+                        if cursor-position.x + self.computed_x < root.margin {
+                            self.computed_x = - cursor-position.x + root.margin;
+                        } else if cursor-position.x + self.computed_x > parent.width - root.margin - self.text-cursor-width {
+                            self.computed_x = parent.width - cursor-position.x - root.margin - self.text-cursor-width;
+                        }
+                    }
+
+                    accepted => {
+                        root.accepted(self.text);
+                    }
+
+                    edited => {
+                        root.edited(self.text);
+                    }
+
+                    key-pressed(event) => {
+                        root.key-pressed(event)
+                    }
+
+                    key-released(event) => {
+                        root.key-released(event)
+                    }
+                }
+            }
+        }
+
+        focus-border := Rectangle {
+            height: 2px;
+            y: parent.height - self.height - 1px;
+        }
+    }
+
+    touch-area := TouchArea {
+        clicked => {
+            // Focus the text input when the line edit is clicked
+            text-input.focus();
+        }
+    }
+}

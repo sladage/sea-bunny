@@ -1,0 +1,42 @@
+
+
+import { SeaBunnyTheme } from "../theme.slint";
+import { Palette } from "std-widgets.slint";
+export component Button inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary;
+
+    //width: 100%;
+    height: 32px;
+    border-radius: 4px;
+
+    background: primary ? SeaBunnyTheme.accent-background : Palette.control-background;
+
+    callback clicked();
+
+    states [
+        hover when touch-area.has-hover: {
+            root.background: primary ? SeaBunnyTheme.accent-background.brighter(0.1) : Palette.control-background.brighter(0.1);
+        }
+    ]
+
+    HorizontalLayout {
+        padding-top: 4px;
+        padding-bottom: self.padding-top;
+        padding-left: 8px;
+        padding-right: self.padding-left;
+
+        Text {
+            text: root.text;
+            horizontal-alignment: TextHorizontalAlignment.center;
+            vertical-alignment: TextVerticalAlignment.center;
+            color: primary ? SeaBunnyTheme.accent-foreground : Palette.control-foreground;
+        }
+    }
+
+    touch-area := TouchArea {
+        clicked => {
+            root.clicked();
+        }
+    }
+}

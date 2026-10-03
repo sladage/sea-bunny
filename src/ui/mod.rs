@@ -17,9 +17,9 @@ pub mod generated {
     slint::include_modules!();
 }
 
-pub fn start_ui(ctx: AppContext) -> anyhow::Result<()> {
+pub async fn start_ui(ctx: AppContext) -> anyhow::Result<()> {
     let a = App::new(ctx)?;
-    a.show()?;
+    a.show().await?;
 
     Ok(())
 }

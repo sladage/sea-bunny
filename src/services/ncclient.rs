@@ -55,7 +55,7 @@ pub struct NCClient {
     credentials: RefCell<Option<(String, String)>>, // (login_name, app_password)
 }
 
-#[asynchronize]
+#[asynchronize(pub)]
 impl NCClient {
     pub async fn new(ncserver: Url) -> Result<ShardRcHandle<Self>> {
         Self::spawn(|| Self {
@@ -97,26 +97,47 @@ impl NCClient {
         // Open the login URL in the user's default browser.
         open::that(auth_token.login.as_str()).map_err(|_| LoginError::FailedToOpenBrowser)?;
 
-        loop {
-            // Check if there's an active auth request token.
-            match self.poll_auth(&auth_token.poll).await {
-                Ok(credentials) => {
-                    // Save the credentials in the keyring.
-                    if let Err(e) = self.save_credentials(credentials).await {
-                        return Err(e);
-                    } else {
-                        // Login successful.
-                        return Ok(());
-                    }
-                }
-                Err(LoginError::Pending) => {
-                    // Login flow is still pending; continue polling.
-                }
-                Err(e) => return Err(e),
-            };
+        let self_handle = self.as_rc_handle().unwrap();
+        tokio::spawn(async move {
+            let client = self_handle;
+            loop {
+                let auth_token = auth_token.clone();
+                // Check if there's an active auth request token.
 
-            // Sleep for a while before the next iteration.
-            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                if !client.check_auth(auth_token.clone()).await {
+                    break;
+                }
+
+                // Sleep for a while before the next iteration.
+                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+            }
+        });
+
+        Ok(())
+    }
+
+    #[asynced]
+    async fn check_auth(&self, auth_token: LoginFlowV2StartResponse) -> bool {
+        match self.poll_auth(&auth_token.poll).await {
+            Ok(credentials) => {
+                // Save the credentials in the keyring.
+                if let Err(e) = self.save_credentials(credentials).await {
+                    self.events.on_login().emit(OnLogin::Failure(e.to_string()));
+                } else {
+                    // Login successful.
+                    self.events.on_login().emit(OnLogin::Success);
+                }
+                false
+            }
+            Err(LoginError::Pending) => {
+                // Login flow is still pending; continue polling.
+                true
+            }
+            Err(e) => {
+                // An error occurred during polling.
+                self.events.on_login().emit(OnLogin::Failure(e.to_string()));
+                false
+            }
         }
     }
 

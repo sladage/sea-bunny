@@ -1,29 +1,37 @@
 import {
-    Button,
     HorizontalBox,
     VerticalBox,
     StyleMetrics,
-    LineEdit,
     Palette,
 } from "std-widgets.slint";
+import { Button } from "../../components/button.slint";
+import { LineEdit } from "../../components/lineedit.slint";
 
 export component FirstTimeSetupWindow inherits Window {
     in property <bool> has-error: false;
     in property <string> message: @tr("First time setup");
 
     width: 400px;
-    height: 190px;
+    height: 460px;
     title: @tr("First Time Setup");
 
     callback connect(server: string);
 
     VerticalLayout {
-        HorizontalBox {
-            Text {
-                text: @tr("Welcome to Sea Bunny!");
-                font-size: 20px;
-                font-weight: FontWeight.bold;
-                horizontal-alignment: center;
+
+        HorizontalLayout {
+            padding: 40px;
+            padding-bottom: 20px;
+            alignment: LayoutAlignment.center;
+            cross-axis-alignment: CrossAxisAlignment.center;
+
+            Rectangle {
+                height: 240px;
+                Image {
+                    source: Palette.color-scheme == ColorScheme.dark ? @image-url("../../assets/logo-dark.svg") : @image-url("../../assets/logo-light.svg");
+                    height: parent.height;
+                    image-fit: ImageFit.contain;
+                }
             }
         }
 

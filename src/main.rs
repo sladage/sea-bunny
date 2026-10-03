@@ -31,6 +31,6 @@ async fn run_app() -> anyhow::Result<()> {
             .await
             .expect("Unable to create NCClient."),
     };
-    ui::start_ui(ctx)?;
+    ui::start_ui(ctx).await?;
     Ok(())
 }

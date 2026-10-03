@@ -1,117 +1,19 @@
 import {
     VerticalBox,
-    LineEdit,
     ScrollView,
     ListView,
     Palette,
     StyleMetrics,
-    Button,
+    ProgressIndicator,
+    Spinner,
 } from "std-widgets.slint";
 import { ConversationView } from "conversation.slint";
 import { UIConversationItem } from "../../models/conversation-item.slint";
 import { ToolButton } from "../../components/tool-button.slint";
-
-component SidebarButton inherits Rectangle {
-    in property <string> text;
-    in property <image> icon;
-    in property <bool> active: false;
-
-    callback clicked <=> touch-area.clicked;
-
-    border-radius: 4px;
-
-    states [
-        hover when touch-area.has-hover: {
-            root.background: Palette.foreground.transparentize(0.9);
-        }
-    ]
-
-    HorizontalLayout {
-
-        Rectangle {
-            width: 3px;
-            background: active ? Palette.accent-background : Colors.transparent;
-            border-radius: 1px;
-        }
-
-        HorizontalLayout {
-            spacing: StyleMetrics.layout-spacing;
-            padding: StyleMetrics.layout-spacing / 2;
-
-            Image {
-                source: root.icon;
-                width: 24px;
-                height: 24px;
-            }
-
-            Text {
-                text: root.text;
-                vertical-alignment: TextVerticalAlignment.center;
-            }
-        }
-    }
-
-    touch-area := TouchArea { }
-}
-
-component ConversationItem inherits Rectangle {
-    in property <UIConversationItem> conversation;
-    in property <bool> active: false;
-
-    callback clicked <=> touch-area.clicked;
-
-    border-radius: 4px;
-
-    states [
-        hover when touch-area.has-hover: {
-            root.background: Palette.foreground.transparentize(0.9);
-        }
-    ]
-
-    HorizontalLayout {
-        spacing: StyleMetrics.layout-spacing / 2;
-        padding-top: StyleMetrics.layout-spacing;
-        padding-bottom: StyleMetrics.layout-spacing;
-        padding-right: StyleMetrics.layout-spacing / 2;
-
-        Rectangle {
-            width: 3px;
-            background: active ? Palette.accent-background : Colors.transparent;
-            border-radius: 1px;
-        }
-
-        Rectangle {
-            width: 1px;
-        }
-
-        Rectangle {
-            height: 40px;
-            width: 40px;
-
-            background: Palette.accent-background;
-            border-radius: 20px;
-
-            Image {
-                source: conversation.avatar;
-                height: 40px;
-                width: 40px;
-            }
-        }
-
-        VerticalLayout {
-            Text {
-                text: conversation.name;
-            }
-
-            Text {
-                text: conversation.last-message;
-                overflow: TextOverflow.elide;
-            }
-        }
-    }
-
-    touch-area := TouchArea { }
-}
+import { SidebarButton } from "./sidebar-btn.slint";
+import { ConversationItem } from "./conversation-item.slint";
+import { Button } from "../../components/button.slint";
+import { LineEdit } from "../../components/lineedit.slint";
 
 export component AppWindow inherits Window {
     min-width: 800px;
@@ -127,6 +29,8 @@ export component AppWindow inherits Window {
         }
     ];
     in-out property <int> active-conversation-index: 0;
+    in property <bool> is-loading: false;
+    in property <string> loading-status;
 
     HorizontalLayout {
         Rectangle {
@@ -210,6 +114,26 @@ export component AppWindow inherits Window {
         if conversations.length > 0 && active-conversation-index >= 0: ConversationView {
             horizontal-stretch: 1;
             conversation: conversations[active-conversation-index];
+        }
+    }
+
+    if root.is-loading: Rectangle {
+        background: Colors.black.transparentize(0.5);
+
+        VerticalLayout {
+            alignment: LayoutAlignment.center;
+            cross-axis-alignment: CrossAxisAlignment.center;
+            spacing: 24px;
+
+            Spinner {
+                indeterminate: true;
+                height: 48px;
+                width: self.height;
+            }
+
+            Text {
+                text: root.loading-status;
+            }
         }
     }
 }
