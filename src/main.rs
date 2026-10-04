@@ -5,7 +5,7 @@ use eventful_rs::ShardRc;
 use crate::{
     app_context::AppContext,
     models::config::{Config, config},
-    services::{ncclient::NCClient, talk::TalkServices},
+    services::{ncclient::NCClient, notifications::NotificationServices, talk::TalkServices},
     ui::first_time_setup::FirstTimeSetup,
 };
 
@@ -38,7 +38,14 @@ async fn run_app() -> anyhow::Result<()> {
     let talk = TalkServices::new(&client)
         .await
         .expect("Unable to create Talk services.");
-    let ctx = Arc::new(AppContext { client, talk });
+    let notifications = NotificationServices::new(&client)
+        .await
+        .expect("Unable to create notification services.");
+    let ctx = Arc::new(AppContext {
+        client,
+        talk,
+        notifications,
+    });
     ui::start_ui(ctx).await?;
     Ok(())
 }

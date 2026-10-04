@@ -35,6 +35,13 @@ impl<T> OcsResponse<T> {
     }
 }
 
+/// Body of a non-OCS response.
+#[derive(Debug, Clone)]
+pub struct Download {
+    pub content_type: Option<String>,
+    pub data: Vec<u8>,
+}
+
 /// A request against the Nextcloud server, authenticated as the current user.
 #[must_use = "requests do nothing until sent"]
 pub struct NcRequest<'a> {
@@ -120,6 +127,21 @@ impl NcRequest<'_> {
         self
     }
 
+    pub fn body(mut self, body: Vec<u8>) -> Self {
+        self.builder = self.builder.map(|b| b.body(body));
+        self
+    }
+
+    pub fn multipart(mut self, form: reqwest::multipart::Form) -> Self {
+        self.builder = self.builder.map(|b| b.multipart(form));
+        self
+    }
+
+    pub fn header(mut self, name: &'static str, value: &str) -> Self {
+        self.builder = self.builder.map(|b| b.header(name, value));
+        self
+    }
+
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.builder = self.builder.map(|b| b.timeout(timeout));
         self
@@ -132,16 +154,29 @@ impl NcRequest<'_> {
         decode(endpoint, response).await
     }
 
-    /// Like [`Self::send`], but yields `None` on `304 Not Modified`.
-    pub async fn send_unless_not_modified<T: DeserializeOwned>(
+    /// Like [`Self::send`], but `data` is `None` for responses without a body:
+    /// `204 No Content` and `304 Not Modified`.
+    pub async fn send_optional<T: DeserializeOwned>(
         self,
-    ) -> Result<Option<OcsResponse<T>>, NcError> {
+    ) -> Result<OcsResponse<Option<T>>, NcError> {
         let endpoint = self.endpoint.clone();
         let response = self.execute().await?;
-        if response.status() == StatusCode::NOT_MODIFIED {
-            return Ok(None);
+        if matches!(
+            response.status(),
+            StatusCode::NO_CONTENT | StatusCode::NOT_MODIFIED
+        ) {
+            return Ok(OcsResponse {
+                data: None,
+                status: response.status(),
+                headers: response.headers().clone(),
+            });
         }
-        decode(endpoint, response).await.map(Some)
+        let response = decode::<T>(endpoint, response).await?;
+        Ok(OcsResponse {
+            data: Some(response.data),
+            status: response.status,
+            headers: response.headers,
+        })
     }
 
     /// Send and ignore the OCS `data`.
@@ -154,10 +189,18 @@ impl NcRequest<'_> {
         })
     }
 
-    /// Send, returning the raw response for non-OCS endpoints (avatars, files, ...).
-    /// Error statuses are still mapped to [`NcError`].
-    pub async fn send_raw(self) -> Result<reqwest::Response, NcError> {
-        self.execute().await
+    /// Send and return the body of a non-OCS response (avatars, exports, ...).
+    pub async fn send_download(self) -> Result<Download, NcError> {
+        let response = self.execute().await?;
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
+        Ok(Download {
+            content_type,
+            data: response.bytes().await?.to_vec(),
+        })
     }
 
     async fn execute(self) -> Result<reqwest::Response, NcError> {

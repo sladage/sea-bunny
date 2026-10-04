@@ -5,29 +5,17 @@
 
 use eventful_rs::*;
 
-use super::{bind_service, room_path};
 use crate::{
     dto::talk::{Conversation, SessionState},
-    services::ncclient::{NCClient, NCClientShard, NcError},
+    services::{ncclient::NcError, talk::room_path},
 };
 
-use_shard!(shard = NCClientShard);
-
-#[eventful]
-pub struct ConversationSessionService {
-    client: ShardRc<NCClient>,
+service! {
+    pub struct ConversationSessionService;
 }
 
 #[asynchronize(pub)]
 impl ConversationSessionService {
-    pub async fn new(client: &ShardRcHandle<NCClient>) -> Result<ShardRcHandle<Self>, NcError> {
-        bind_service(client, |client| Self {
-            client,
-            events: Default::default(),
-        })
-        .await
-    }
-
     /// Join the conversation, creating a session. The returned conversation carries
     /// the new `session_id`.
     ///

@@ -2,47 +2,49 @@
 
 use eventful_rs::*;
 
-use super::{ApiVersion, bind_service, room_path, talk_path};
 use crate::{
-    dto::talk::{
-        Conversation, ConversationList, ConversationListQuery, CreateConversation,
-        CreatedConversation,
+    dto::{
+        capabilities::TalkCapabilities,
+        serde_ext::PhpOption,
+        talk::{
+            Conversation, ConversationList, ConversationListQuery, ConversationPreset,
+            CreateConversation, CreatedConversation,
+        },
     },
-    services::ncclient::{NCClient, NCClientShard, NcError},
+    services::{
+        ncclient::{NCClient, NcError},
+        talk::{ApiVersion, room_path, talk_path},
+    },
 };
 
-use_shard!(shard = NCClientShard);
+service! {
+    pub struct ConversationService;
+}
 
-#[eventful]
-pub struct ConversationService {
-    client: ShardRc<NCClient>,
+/// Shared with `ConversationFeedService`.
+pub(crate) async fn fetch_conversations(
+    client: &NCClient,
+    query: &ConversationListQuery,
+) -> Result<ConversationList, NcError> {
+    let response = client
+        .get(&talk_path(ApiVersion::V4, "room"))
+        .query(query)
+        .send::<Vec<Conversation>>()
+        .await?;
+    Ok(ConversationList {
+        modified_before: response.header_i64("X-Nextcloud-Talk-Modified-Before"),
+        pending_federation_invites: response.header_i64("X-Nextcloud-Talk-Federation-Invites"),
+        conversations: response.data,
+    })
 }
 
 #[asynchronize(pub)]
 impl ConversationService {
-    pub async fn new(client: &ShardRcHandle<NCClient>) -> Result<ShardRcHandle<Self>, NcError> {
-        bind_service(client, |client| Self {
-            client,
-            events: Default::default(),
-        })
-        .await
-    }
-
     /// Conversations of the current user. Use `ConversationList::modified_before` as
     /// the next `modified_since` to only fetch changes.
     #[asynced]
     pub async fn list(&self, query: ConversationListQuery) -> Result<ConversationList, NcError> {
-        let response = self
-            .client
-            .get(&talk_path(ApiVersion::V4, "room"))
-            .query(&query)
-            .send::<Vec<Conversation>>()
-            .await?;
-        Ok(ConversationList {
-            modified_before: response.header_i64("X-Nextcloud-Talk-Modified-Before"),
-            pending_federation_invites: response.header_i64("X-Nextcloud-Talk-Federation-Invites"),
-            conversations: response.data,
-        })
+        fetch_conversations(&self.client, &query).await
     }
 
     #[asynced]
@@ -87,6 +89,17 @@ impl ConversationService {
             .data)
     }
 
+    /// Presets the server offers for [`CreateConversation::preset`].
+    #[asynced]
+    pub async fn presets(&self) -> Result<Vec<ConversationPreset>, NcError> {
+        Ok(self
+            .client
+            .get(&talk_path(ApiVersion::V1, "presets/room"))
+            .send()
+            .await?
+            .data)
+    }
+
     #[asynced]
     pub async fn rename(&self, token: String, name: String) -> Result<Conversation, NcError> {
         Ok(self
@@ -121,5 +134,18 @@ impl ConversationService {
             .send_discarding_data()
             .await?;
         Ok(())
+    }
+
+    /// Capabilities of the server hosting a federated conversation. `None` for
+    /// local conversations, which use the own server's capabilities.
+    #[asynced]
+    pub async fn capabilities(&self, token: String) -> Result<Option<TalkCapabilities>, NcError> {
+        Ok(self
+            .client
+            .get(&room_path(&token, "/capabilities"))
+            .send::<PhpOption<TalkCapabilities>>()
+            .await?
+            .data
+            .0)
     }
 }

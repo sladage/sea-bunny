@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use super::{ActorType, MessageType, UserStatus};
-use crate::dto::serde_ext::{bool_as_int, empty_array_as_default};
+use crate::dto::rich_object::RichObjectParameter;
+use crate::dto::serde_ext::{bool_as_int, empty_as_default};
 
 /// A chat message. Also used for deleted parents (`deleted == true`, only `id` set)
 /// and for the proxy messages of federated conversations (no `id`).
@@ -18,7 +19,7 @@ pub struct ChatMessage {
     pub timestamp: i64,
     /// Message text with `{placeholder}`s for each entry in `message_parameters`.
     pub message: String,
-    #[serde(deserialize_with = "empty_array_as_default")]
+    #[serde(deserialize_with = "empty_as_default")]
     pub message_parameters: HashMap<String, RichObjectParameter>,
     pub message_type: MessageType,
     /// System message identifier (e.g. `conversation_created`), empty for comments.
@@ -31,7 +32,7 @@ pub struct ChatMessage {
     /// Unix timestamp at which the message expires, 0 when it doesn't.
     pub expiration_timestamp: i64,
 
-    #[serde(deserialize_with = "empty_array_as_default")]
+    #[serde(deserialize_with = "empty_as_default")]
     pub reactions: HashMap<String, i64>,
     pub reactions_self: Vec<String>,
 
@@ -76,43 +77,6 @@ pub struct ChatMessageMetaData {
     pub reply_to_actor_display_name: Option<String>,
 }
 
-/// A rich object referenced from a message placeholder (user mention, file, call, ...).
-/// All values are strings in the API.
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(default, rename_all = "kebab-case")]
-pub struct RichObjectParameter {
-    #[serde(rename = "type")]
-    pub object_type: String,
-    pub id: String,
-    pub name: String,
-    pub server: Option<String>,
-    pub link: Option<String>,
-    pub call_type: Option<String>,
-    pub icon_url: Option<String>,
-    pub message_id: Option<String>,
-    pub boardname: Option<String>,
-    pub stackname: Option<String>,
-    pub size: Option<String>,
-    pub path: Option<String>,
-    pub mimetype: Option<String>,
-    pub preview_available: Option<String>,
-    pub hide_download: Option<String>,
-    pub mtime: Option<String>,
-    pub latitude: Option<String>,
-    pub longitude: Option<String>,
-    pub description: Option<String>,
-    pub thumb: Option<String>,
-    pub website: Option<String>,
-    pub visibility: Option<String>,
-    pub assignable: Option<String>,
-    pub conversation: Option<String>,
-    pub etag: Option<String>,
-    pub permissions: Option<String>,
-    pub width: Option<String>,
-    pub height: Option<String>,
-    pub blurhash: Option<String>,
-}
-
 /// Suggestion for completing an `@mention`.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -126,6 +90,16 @@ pub struct MentionSuggestion {
     pub details: Option<String>,
     #[serde(flatten)]
     pub user_status: UserStatus,
+}
+
+/// A started chat summary task.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct ChatSummary {
+    pub task_id: i64,
+    /// When more messages remain than one summary covers, the message id to
+    /// continue from.
+    pub next_offset: i64,
 }
 
 /// A page of chat messages.

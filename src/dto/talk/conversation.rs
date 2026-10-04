@@ -6,7 +6,7 @@ use super::{
     MentionPermissions, NotificationLevel, ParticipantType, Permissions, ReadOnlyState,
     RecordingConsent, SipState, UserStatus,
 };
-use crate::dto::serde_ext::empty_array_as_none;
+use crate::dto::serde_ext::empty_as_none;
 
 /// A Talk conversation ("room" in the API), as seen by the current user.
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -83,7 +83,7 @@ pub struct Conversation {
     pub unread_mention: bool,
     pub unread_mention_direct: bool,
     /// Not present for empty conversations. Never contains `parent` or `reactionsSelf`.
-    #[serde(deserialize_with = "empty_array_as_none")]
+    #[serde(deserialize_with = "empty_as_none")]
     pub last_message: Option<ChatMessage>,
     pub last_pinned_id: i64,
     pub hidden_pinned_id: i64,
@@ -255,7 +255,7 @@ pub struct CreatedConversation {
     #[serde(flatten)]
     pub conversation: Conversation,
     /// Invitations the server could not deliver (HTTP 202).
-    #[serde(deserialize_with = "empty_array_as_none")]
+    #[serde(deserialize_with = "empty_as_none")]
     pub invalid_participants: Option<InvitationList>,
 }
 

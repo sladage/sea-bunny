@@ -1335,8 +1335,8 @@ dependencies = [
 
 [[package]]
 name = "eventful-rs"
-version = "0.2.1"
-source = "git+https://github.com/DreamLogics/eventful-rs#5ca685482e675d3c512e0aa4af0a6556ac4d657d"
+version = "0.2.2"
+source = "git+https://github.com/DreamLogics/eventful-rs#61e194227795f101fd4677e8ddb15f328dcc6981"
 dependencies = [
  "eventful-rs-macros",
  "futures",
@@ -1347,8 +1347,8 @@ dependencies = [
 
 [[package]]
 name = "eventful-rs-macros"
-version = "0.2.1"
-source = "git+https://github.com/DreamLogics/eventful-rs#5ca685482e675d3c512e0aa4af0a6556ac4d657d"
+version = "0.2.2"
+source = "git+https://github.com/DreamLogics/eventful-rs#61e194227795f101fd4677e8ddb15f328dcc6981"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -4655,6 +4655,7 @@ dependencies = [
  "eventful-rs",
  "keyring",
  "open",
+ "percent-encoding",
  "reqwest",
  "serde",
  "serde_json",

@@ -1,32 +1,34 @@
-//! Nextcloud Talk API services.
+//! Nextcloud Talk (spreed) API services, grouped by area.
 //!
-//! Each service covers one API area and lives on [`NCClientShard`] next to the
-//! [`NCClient`] it uses, so it can call the client's shard-local request API
-//! directly. Other shards use the services through their handles.
+//! Every service is a small `#[eventful]` type on the client's shard; other
+//! shards use them through the handles collected in [`TalkServices`].
 
+pub mod calls;
 pub mod chat;
-pub mod chat_feed;
-pub mod conversation_sessions;
 pub mod conversations;
-pub mod participants;
+pub mod guests;
+pub mod integrations;
+pub mod user_settings;
 
 #[cfg(test)]
 mod tests;
 
 use eventful_rs::*;
 
-use crate::services::ncclient::{NCClient, NCClientShard, NcError};
+use crate::services::ncclient::{NCClient, NcError};
 
-pub use chat::ChatService;
-pub use chat_feed::ChatFeedService;
-pub use conversation_sessions::ConversationSessionService;
-pub use conversations::ConversationService;
-pub use participants::ParticipantService;
+pub use calls::CallServices;
+pub use chat::ChatServices;
+pub use conversations::ConversationServices;
+pub use guests::GuestService;
+pub use integrations::IntegrationServices;
+pub use user_settings::UserSettingsService;
 
 /// Talk versions its endpoints individually.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum ApiVersion {
     V1,
+    V3,
     V4,
 }
 
@@ -34,6 +36,7 @@ pub(crate) enum ApiVersion {
 pub(crate) fn talk_path(version: ApiVersion, path: impl std::fmt::Display) -> String {
     let version = match version {
         ApiVersion::V1 => "v1",
+        ApiVersion::V3 => "v3",
         ApiVersion::V4 => "v4",
     };
     format!("ocs/v2.php/apps/spreed/api/{version}/{path}")
@@ -70,41 +73,26 @@ impl EventLabel for ConversationLabel {
     }
 }
 
-/// Bind a service on the client's shard, handing it a local reference to the client.
-pub(crate) async fn bind_service<S, F>(
-    client: &ShardRcHandle<NCClient>,
-    make: F,
-) -> Result<ShardRcHandle<S>, NcError>
-where
-    S: Eventful<Shard = NCClientShard> + HasEvents<S::EventSetType> + 'static,
-    F: FnOnce(ShardRc<NCClient>) -> S + Send + 'static,
-{
-    client
-        .deferred_upgrade_in_shard(async move |client: &NCClient| {
-            let client = ShardRc::try_from_ref(client)?;
-            Ok(ShardRc::try_bind(make(client))?.to_handle())
-        })
-        .await
-}
-
 /// Handles to all Talk services.
 #[derive(Clone)]
 pub struct TalkServices {
-    pub conversations: ShardRcHandle<ConversationService>,
-    pub sessions: ShardRcHandle<ConversationSessionService>,
-    pub participants: ShardRcHandle<ParticipantService>,
-    pub chat: ShardRcHandle<ChatService>,
-    pub chat_feed: ShardRcHandle<ChatFeedService>,
+    pub conversations: ConversationServices,
+    pub chat: ChatServices,
+    pub calls: CallServices,
+    pub integrations: IntegrationServices,
+    pub user_settings: ShardRcHandle<UserSettingsService>,
+    pub guests: ShardRcHandle<GuestService>,
 }
 
 impl TalkServices {
     pub async fn new(client: &ShardRcHandle<NCClient>) -> Result<Self, NcError> {
         Ok(Self {
-            conversations: ConversationService::new(client).await?,
-            sessions: ConversationSessionService::new(client).await?,
-            participants: ParticipantService::new(client).await?,
-            chat: ChatService::new(client).await?,
-            chat_feed: ChatFeedService::new(client).await?,
+            conversations: ConversationServices::new(client).await?,
+            chat: ChatServices::new(client).await?,
+            calls: CallServices::new(client).await?,
+            integrations: IntegrationServices::new(client).await?,
+            user_settings: UserSettingsService::new(client).await?,
+            guests: GuestService::new(client).await?,
         })
     }
 }

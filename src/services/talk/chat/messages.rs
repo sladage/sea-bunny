@@ -3,32 +3,20 @@
 
 use eventful_rs::*;
 
-use super::{bind_service, chat_path};
 use crate::{
     dto::talk::{
-        ChatMessage, ChatPage, Conversation, HistoryQuery, MentionSuggestion, ReceiveMessagesQuery,
-        SendMessage,
+        ChatMessage, ChatPage, ChatSummary, Conversation, HistoryQuery, MentionSuggestion,
+        ReceiveMessagesQuery, SendMessage,
     },
-    services::ncclient::{NCClient, NCClientShard, NcError},
+    services::{ncclient::NcError, talk::chat_path},
 };
 
-use_shard!(shard = NCClientShard);
-
-#[eventful]
-pub struct ChatService {
-    client: ShardRc<NCClient>,
+service! {
+    pub struct ChatService;
 }
 
 #[asynchronize(pub)]
 impl ChatService {
-    pub async fn new(client: &ShardRcHandle<NCClient>) -> Result<ShardRcHandle<Self>, NcError> {
-        bind_service(client, |client| Self {
-            client,
-            events: Default::default(),
-        })
-        .await
-    }
-
     /// Load a page of messages without waiting for new ones.
     #[asynced]
     pub async fn history(&self, token: String, query: HistoryQuery) -> Result<ChatPage, NcError> {
@@ -36,16 +24,13 @@ impl ChatService {
             .client
             .get(&chat_path(&token, ""))
             .query(&ReceiveMessagesQuery::from(&query))
-            .send_unless_not_modified::<Vec<ChatMessage>>()
+            .send_optional::<Vec<ChatMessage>>()
             .await?;
-        // 304: nothing beyond `last_known_message_id`.
-        let Some(response) = response else {
-            return Ok(ChatPage::default());
-        };
         Ok(ChatPage {
             last_given: response.header_i64("X-Chat-Last-Given"),
             last_common_read: response.header_i64("X-Chat-Last-Common-Read"),
-            messages: response.data,
+            // 304: nothing beyond `last_known_message_id`.
+            messages: response.data.unwrap_or_default(),
         })
     }
 
@@ -63,9 +48,9 @@ impl ChatService {
             .get(&chat_path(&token, &format!("/{message_id}/context")))
             .query(&[("limit", limit)])
             .query(&[("threadId", thread_id.unwrap_or(0))])
-            .send_unless_not_modified::<Vec<ChatMessage>>()
+            .send_optional::<Vec<ChatMessage>>()
             .await?;
-        Ok(response.map(|r| r.data).unwrap_or_default())
+        Ok(response.data.unwrap_or_default())
     }
 
     /// Send a message. Returns the stored message, or `None` if the server did not
@@ -169,6 +154,24 @@ impl ChatService {
             .query(&[("limit", limit)])
             .query(&[("includeStatus", include_status)])
             .send()
+            .await?
+            .data)
+    }
+
+    /// Start an AI summary of the messages after `from_message_id`. Returns `None`
+    /// when there is too little to summarize. The summary arrives as a
+    /// notification once the task finishes.
+    #[asynced]
+    pub async fn summarize(
+        &self,
+        token: String,
+        from_message_id: i64,
+    ) -> Result<Option<ChatSummary>, NcError> {
+        Ok(self
+            .client
+            .post(&chat_path(&token, "/summarize"))
+            .json(&serde_json::json!({ "fromMessageId": from_message_id }))
+            .send_optional()
             .await?
             .data)
     }

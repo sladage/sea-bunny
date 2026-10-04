@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use super::{ActorType, InCallFlags, ParticipantType, Permissions, UserStatus};
+use super::{ActorType, ConversationType, InCallFlags, ParticipantType, Permissions, UserStatus};
 
 /// An attendee of a conversation, with their active sessions.
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -31,6 +31,20 @@ impl Participant {
     pub fn is_online(&self) -> bool {
         !self.session_ids.is_empty()
     }
+}
+
+/// Outcome of importing email guests from a CSV file.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct EmailImportResult {
+    pub invites: i64,
+    pub duplicates: i64,
+    pub invalid: i64,
+    /// 1-based CSV lines that could not be imported.
+    pub invalid_lines: Vec<i64>,
+    /// Conversation type afterwards (one-to-one conversations can't have guests).
+    #[serde(rename = "type")]
+    pub conversation_type: ConversationType,
 }
 
 #[cfg(test)]

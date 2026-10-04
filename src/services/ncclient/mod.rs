@@ -12,11 +12,10 @@ mod request;
 use std::cell::RefCell;
 
 use eventful_rs::*;
-use tokio::task::AbortHandle;
 use url::Url;
 
 pub use error::NcError;
-pub use request::{NcRequest, OcsResponse};
+pub use request::{Download, NcRequest, OcsResponse};
 
 use crate::dto::{capabilities::ServerCapabilities, user::CurrentUser};
 use auth::Credentials;
@@ -56,7 +55,7 @@ pub struct NCClient {
     user: RefCell<Option<CurrentUser>>,
     capabilities: RefCell<Option<ServerCapabilities>>,
     talk_hash: RefCell<Option<String>>,
-    login_flow: RefCell<Option<AbortHandle>>,
+    login_flow: RefCell<Option<TaskHandle>>,
 }
 
 #[asynchronize(pub)]
@@ -132,6 +131,29 @@ impl NCClient {
         Ok(self.capabilities().await?.has_talk_feature(&feature))
     }
 
+    /// Id of the authenticated user (shard-local).
+    pub fn user_id(&self) -> Option<String> {
+        self.user.borrow().as_ref().map(|user| user.id.clone())
+    }
+
+    /// WebDAV path of a file in the user's storage, with every segment encoded.
+    pub fn dav_file_path(&self, path: &str) -> Result<String, NcError> {
+        let user = self.user_id().ok_or(NcError::NotAuthenticated)?;
+        let encode = |segment: &str| {
+            percent_encoding::utf8_percent_encode(segment, PATH_SEGMENT).to_string()
+        };
+        let segments: Vec<String> = path
+            .split('/')
+            .filter(|segment| !segment.is_empty())
+            .map(encode)
+            .collect();
+        Ok(format!(
+            "remote.php/dav/files/{}/{}",
+            encode(&user),
+            segments.join("/")
+        ))
+    }
+
     fn observe_talk_hash(&self, hash: &str) {
         let previous = self.talk_hash.replace(Some(hash.to_owned()));
         if previous.is_some_and(|previous| previous != hash) {
@@ -141,13 +163,12 @@ impl NCClient {
     }
 }
 
-impl Drop for NCClient {
-    fn drop(&mut self) {
-        if let Some(flow) = self.login_flow.get_mut().take() {
-            flow.abort();
-        }
-    }
-}
+/// Everything except RFC 3986 unreserved characters.
+const PATH_SEGMENT: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'.')
+    .remove(b'_')
+    .remove(b'~');
 
 /// `Url::join` replaces the last path segment unless the base ends with `/`,
 /// which would break servers installed below a sub path.

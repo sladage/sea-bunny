@@ -12,12 +12,14 @@ use std::{
 };
 
 use eventful_rs::*;
-use tokio::task::AbortHandle;
 
-use super::{ConversationLabel, bind_service, chat_path};
 use crate::{
     dto::talk::{ChatMessage, ReceiveMessagesQuery},
-    services::ncclient::{NCClient, NCClientShard, NcError},
+    services::{
+        bind_service,
+        ncclient::{NCClient, NCClientShard, NcError},
+        talk::{ConversationLabel, chat_path},
+    },
 };
 
 use_shard!(shard = NCClientShard);
@@ -30,8 +32,6 @@ const RETRY_MIN: Duration = Duration::from_secs(1);
 const RETRY_MAX: Duration = Duration::from_secs(30);
 const PAGE_SIZE: u32 = 100;
 
-// Default bodies let listeners implement only the events they need.
-#[allow(unused_variables)]
 #[events]
 pub trait ChatFeedEvents {
     /// New messages, oldest first. Includes system messages for edits, deletions,
@@ -72,7 +72,8 @@ pub struct ChatFeedService {
 struct Feed {
     /// Distinguishes a replaced feed from its successor for the same token.
     id: u64,
-    task: AbortHandle,
+    /// Owned by the service: aborted when it is destroyed.
+    task: TaskHandle,
 }
 
 #[asynchronize(pub)]
@@ -91,15 +92,14 @@ impl ChatFeedService {
     /// for the same token, e.g. to change its options.
     #[asynced]
     pub fn subscribe(&self, token: String, options: ChatFeedOptions) -> Result<(), NcError> {
-        let this = ShardRc::downgrade(&ShardRc::try_from_ref(self)?);
         let id = self.next_feed_id.get();
         self.next_feed_id.set(id + 1);
 
-        let task = tokio::task::spawn_local(run_feed(this, id, token.clone(), options));
-        let feed = Feed {
-            id,
-            task: task.abort_handle(),
-        };
+        let feed_token = token.clone();
+        let task = ShardRc::spawn_owned(&ShardRc::try_from_ref(self)?, move |this| {
+            run_feed(this, id, feed_token, options)
+        })?;
+        let feed = Feed { id, task };
         if let Some(previous) = self.feeds.borrow_mut().insert(token, feed) {
             previous.task.abort();
         }
@@ -138,14 +138,6 @@ impl ChatFeedService {
     }
 }
 
-impl Drop for ChatFeedService {
-    fn drop(&mut self) {
-        for (_, feed) in self.feeds.get_mut().drain() {
-            feed.task.abort();
-        }
-    }
-}
-
 /// Long-poll loop. Holds the service weakly and only upgrades it between requests,
 /// so dropping the service ends the loop.
 async fn run_feed(
@@ -178,7 +170,7 @@ async fn run_feed(
             .get(&path)
             .query(&query)
             .timeout(REQUEST_TIMEOUT)
-            .send_unless_not_modified::<Vec<ChatMessage>>()
+            .send_optional::<Vec<ChatMessage>>()
             .await;
         drop(client);
         let Some(service) = this.upgrade() else {
@@ -186,13 +178,12 @@ async fn run_feed(
         };
 
         match result {
-            // 304: no new messages within the poll timeout.
-            Ok(None) => retry = RETRY_MIN,
-            Ok(Some(response)) => {
+            Ok(response) => {
                 retry = RETRY_MIN;
                 let last_given = response.header_i64("X-Chat-Last-Given");
                 let last_common_read = response.header_i64("X-Chat-Last-Common-Read");
-                let messages = response.data;
+                // 304: no new messages within the poll timeout.
+                let messages = response.data.unwrap_or_default();
 
                 if let Some(newest) = last_given.or_else(|| messages.iter().map(|m| m.id).max()) {
                     query.last_known_message_id = query.last_known_message_id.max(newest);

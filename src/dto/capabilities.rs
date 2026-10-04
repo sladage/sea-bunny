@@ -3,8 +3,12 @@
 //! Only the parts the client acts on are typed; everything else is kept as raw JSON
 //! so new server capabilities never break deserialization.
 
+use std::collections::HashMap;
+
 use serde::Deserialize;
 use serde_json::{Map, Value};
+
+use crate::dto::serde_ext::empty_as_default;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
@@ -51,6 +55,10 @@ pub struct TalkCapabilities {
     #[serde(rename = "features-local")]
     pub features_local: Vec<String>,
     pub config: TalkConfig,
+    /// Config keys (per section) that only apply to this server, not to
+    /// federated conversations.
+    #[serde(rename = "config-local", deserialize_with = "empty_as_default")]
+    pub config_local: HashMap<String, Vec<String>>,
     pub version: String,
 }
 

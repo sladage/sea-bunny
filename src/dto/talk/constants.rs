@@ -3,89 +3,7 @@
 //! Integer enums keep values unknown to this client in `Unknown(i64)` so a newer
 //! server never breaks deserialization of a whole conversation list.
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-macro_rules! int_enum {
-    (
-        $(#[$meta:meta])*
-        $vis:vis enum $name:ident {
-            $( $(#[$vmeta:meta])* $variant:ident = $value:literal ),+ $(,)?
-        }
-        default = $default:expr;
-    ) => {
-        $(#[$meta])*
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-        $vis enum $name {
-            $( $(#[$vmeta])* $variant, )+
-            /// A value this client does not know about.
-            Unknown(i64),
-        }
-
-        impl $name {
-            pub const fn value(self) -> i64 {
-                match self {
-                    $( Self::$variant => $value, )+
-                    Self::Unknown(value) => value,
-                }
-            }
-
-            pub const fn from_value(value: i64) -> Self {
-                match value {
-                    $( $value => Self::$variant, )+
-                    other => Self::Unknown(other),
-                }
-            }
-        }
-
-        impl Default for $name {
-            fn default() -> Self {
-                $default
-            }
-        }
-
-        impl Serialize for $name {
-            fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-                serializer.serialize_i64(self.value())
-            }
-        }
-
-        impl<'de> Deserialize<'de> for $name {
-            fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-                i64::deserialize(deserializer).map(Self::from_value)
-            }
-        }
-    };
-}
-
-/// Bit flags serialized as a plain integer (bitflags' own serde support uses names).
-macro_rules! int_flags {
-    (
-        $(#[$meta:meta])*
-        $vis:vis struct $name:ident: $repr:ty {
-            $( $(#[$($fmeta:tt)*])* const $flag:ident = $value:expr; )*
-        }
-    ) => {
-        bitflags::bitflags! {
-            $(#[$meta])*
-            #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-            $vis struct $name: $repr {
-                $( $(#[$($fmeta)*])* const $flag = $value; )*
-            }
-        }
-
-        impl Serialize for $name {
-            fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-                self.bits().serialize(serializer)
-            }
-        }
-
-        impl<'de> Deserialize<'de> for $name {
-            fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-                <$repr>::deserialize(deserializer).map(Self::from_bits_retain)
-            }
-        }
-    };
-}
+use serde::{Deserialize, Serialize};
 
 int_enum! {
     pub enum ConversationType {
@@ -335,6 +253,80 @@ pub enum MessageType {
     RecordVideo,
     #[serde(other)]
     Unknown,
+}
+
+int_enum! {
+    /// Read-status and typing privacy of the current user.
+    pub enum Privacy {
+        Public = 0,
+        Private = 1,
+    }
+    default = Self::Public;
+}
+
+int_enum! {
+    pub enum PollStatus {
+        Open = 0,
+        Closed = 1,
+        Draft = 2,
+    }
+    default = Self::Open;
+}
+
+int_enum! {
+    pub enum PollResultMode {
+        /// Results and voters are visible immediately.
+        Public = 0,
+        /// Only vote counts are shown, after the poll closes.
+        Hidden = 1,
+    }
+    default = Self::Public;
+}
+
+int_enum! {
+    pub enum BotState {
+        Disabled = 0,
+        Enabled = 1,
+        /// Can neither be enabled nor disabled by a moderator.
+        NoSetup = 2,
+    }
+    default = Self::Disabled;
+}
+
+int_enum! {
+    pub enum FederationInviteState {
+        Pending = 0,
+        Accepted = 1,
+    }
+    default = Self::Pending;
+}
+
+int_enum! {
+    pub enum RecordingType {
+        Video = 1,
+        Audio = 2,
+    }
+    default = Self::Video;
+}
+
+/// Actor kinds that can be banned from a conversation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BanActorType {
+    Users,
+    Guests,
+    Emails,
+    Ip,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ConversationTagType {
+    #[default]
+    Custom,
+    Favorites,
+    #[serde(other)]
+    Other,
 }
 
 #[cfg(test)]

@@ -3,32 +3,20 @@
 use eventful_rs::*;
 use serde::Deserialize;
 
-use super::{bind_service, room_path};
 use crate::{
     dto::talk::{
-        Conversation, ConversationType, Participant, ParticipantSource, PermissionMethod,
-        Permissions,
+        Conversation, ConversationType, EmailImportResult, Participant, ParticipantSource,
+        PermissionMethod, Permissions,
     },
-    services::ncclient::{NCClient, NCClientShard, NcError},
+    services::{ncclient::NcError, talk::room_path},
 };
 
-use_shard!(shard = NCClientShard);
-
-#[eventful]
-pub struct ParticipantService {
-    client: ShardRc<NCClient>,
+service! {
+    pub struct ParticipantService;
 }
 
 #[asynchronize(pub)]
 impl ParticipantService {
-    pub async fn new(client: &ShardRcHandle<NCClient>) -> Result<ShardRcHandle<Self>, NcError> {
-        bind_service(client, |client| Self {
-            client,
-            events: Default::default(),
-        })
-        .await
-    }
-
     #[asynced]
     pub async fn list(
         &self,
@@ -162,5 +150,30 @@ impl ParticipantService {
             .send_discarding_data()
             .await?;
         Ok(())
+    }
+
+    /// Invite email guests from a CSV file with an `email` and optional `name`
+    /// column. With `test_run`, only validates the file.
+    #[asynced]
+    pub async fn import_emails(
+        &self,
+        token: String,
+        csv: Vec<u8>,
+        test_run: bool,
+    ) -> Result<EmailImportResult, NcError> {
+        let file = reqwest::multipart::Part::bytes(csv)
+            .file_name("participants.csv")
+            .mime_str("text/csv")
+            .map_err(NcError::from)?;
+        let form = reqwest::multipart::Form::new()
+            .part("file", file)
+            .text("testRun", if test_run { "1" } else { "0" });
+        Ok(self
+            .client
+            .post(&room_path(&token, "/import-emails"))
+            .multipart(form)
+            .send()
+            .await?
+            .data)
     }
 }

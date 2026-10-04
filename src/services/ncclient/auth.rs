@@ -52,8 +52,8 @@ impl NCClient {
 
         open::that(flow.login.as_str()).map_err(|e| NcError::Browser(e.to_string()))?;
 
-        let this = ShardRc::downgrade(&ShardRc::try_from_ref(self)?);
-        let task = tokio::task::spawn_local(async move {
+        // Owned by the client: aborted when it is destroyed or on shard shutdown.
+        let task = ShardRc::spawn_owned(&ShardRc::try_from_ref(self)?, |this| async move {
             let deadline = Instant::now() + LOGIN_FLOW_LIFETIME;
             loop {
                 tokio::time::sleep(LOGIN_POLL_INTERVAL).await;
@@ -75,9 +75,9 @@ impl NCClient {
                     }
                 }
             }
-        });
+        })?;
 
-        if let Some(previous) = self.login_flow.replace(Some(task.abort_handle())) {
+        if let Some(previous) = self.login_flow.replace(Some(task)) {
             previous.abort();
         }
         Ok(())
@@ -121,11 +121,16 @@ impl NCClient {
         self.events.on_login().emit(event);
     }
 
+    /// Log in without the login flow or keyring.
     #[cfg(test)]
-    pub(crate) fn set_test_credentials(&self, login_name: &str, app_password: &str) {
+    pub(crate) fn set_test_session(&self, login_name: &str, app_password: &str) {
         self.credentials.replace(Some(Credentials {
             login_name: login_name.to_owned(),
             app_password: app_password.to_owned(),
+        }));
+        self.user.replace(Some(CurrentUser {
+            id: login_name.to_owned(),
+            ..Default::default()
         }));
     }
 
