@@ -34,6 +34,12 @@ impl Config {
 
     fn save_toml(&self, path: &Path) -> Result<()> {
         let toml = toml::to_string(self)?;
+
+        // create parent directories if they don't exist
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
         std::fs::write(path, toml)?;
         Ok(())
     }

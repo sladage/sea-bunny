@@ -3,13 +3,14 @@ import {
     VerticalBox,
     StyleMetrics,
     Palette,
+    Button,
+    LineEdit,
 } from "std-widgets.slint";
-import { Button } from "../../components/button.slint";
-import { LineEdit } from "../../components/lineedit.slint";
 
 export component FirstTimeSetupWindow inherits Window {
     in property <bool> has-error: false;
     in property <string> message: @tr("First time setup");
+    in-out property <bool> input-enabled: true;
 
     width: 400px;
     height: 460px;
@@ -59,6 +60,7 @@ export component FirstTimeSetupWindow inherits Window {
                     }
 
                     server-input := LineEdit {
+                        enabled: input-enabled;
                         placeholder-text: @tr("https://cloud.example.com");
                     }
                 }
@@ -71,7 +73,9 @@ export component FirstTimeSetupWindow inherits Window {
             Button {
                 text: @tr("Connect");
                 primary: true;
+                enabled: input-enabled;
                 clicked => {
+                    input-enabled = false;
                     root.connect(server-input.text);
                 }
             }

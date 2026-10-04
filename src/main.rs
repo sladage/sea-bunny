@@ -1,7 +1,12 @@
+use std::sync::Arc;
+
+use eventful_rs::ShardRc;
+
 use crate::{
     app_context::AppContext,
     models::config::{Config, config},
-    services::ncclient::NCClient,
+    services::{ncclient::NCClient, talk::TalkServices},
+    ui::first_time_setup::FirstTimeSetup,
 };
 
 mod app_context;
@@ -12,9 +17,10 @@ mod ui;
 
 fn main() -> anyhow::Result<()> {
     Config::init();
+    let mut _first_time_setup_window: Option<ShardRc<FirstTimeSetup>> = None;
 
     if config().nextcloud_server.is_none() {
-        ui::start_ui_first_run(&run_app)?;
+        _first_time_setup_window = Some(ui::start_ui_first_run(&run_app)?);
     } else {
         drop(slint::spawn_local(async {
             run_app().await.unwrap();
@@ -26,11 +32,13 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn run_app() -> anyhow::Result<()> {
-    let ctx = AppContext {
-        client: NCClient::new(config().nextcloud_server.unwrap())
-            .await
-            .expect("Unable to create NCClient."),
-    };
+    let client = NCClient::new(config().nextcloud_server.unwrap())
+        .await
+        .expect("Unable to create NCClient.");
+    let talk = TalkServices::new(&client)
+        .await
+        .expect("Unable to create Talk services.");
+    let ctx = Arc::new(AppContext { client, talk });
     ui::start_ui(ctx).await?;
     Ok(())
 }

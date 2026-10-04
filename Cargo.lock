@@ -1335,8 +1335,8 @@ dependencies = [
 
 [[package]]
 name = "eventful-rs"
-version = "0.2.0"
-source = "git+https://github.com/DreamLogics/eventful-rs#8c492a334f2d61688c0b01281f907e92d5f0fa33"
+version = "0.2.1"
+source = "git+https://github.com/DreamLogics/eventful-rs#5ca685482e675d3c512e0aa4af0a6556ac4d657d"
 dependencies = [
  "eventful-rs-macros",
  "futures",
@@ -1347,8 +1347,8 @@ dependencies = [
 
 [[package]]
 name = "eventful-rs-macros"
-version = "0.2.0"
-source = "git+https://github.com/DreamLogics/eventful-rs#8c492a334f2d61688c0b01281f907e92d5f0fa33"
+version = "0.2.1"
+source = "git+https://github.com/DreamLogics/eventful-rs#5ca685482e675d3c512e0aa4af0a6556ac4d657d"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -4650,12 +4650,14 @@ name = "sea-bunny"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bitflags 2.13.2",
  "directories",
  "eventful-rs",
  "keyring",
  "open",
  "reqwest",
  "serde",
+ "serde_json",
  "slint",
  "slint-build",
  "thiserror 2.0.21",

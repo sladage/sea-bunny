@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::UiShard;
 use crate::services::ncclient::*;
 use crate::{app_context::AppContext, models::config::config, ui::generated};
@@ -18,12 +20,12 @@ pub trait AppEvents {
 #[eventful(AppEvents)]
 pub struct App {
     ui: generated::AppWindow,
-    app_ctx: AppContext,
+    app_ctx: Arc<AppContext>,
     ui_events: AppUiEventsBridge,
 }
 
 impl App {
-    pub fn new(ctx: AppContext) -> Result<ShardRc<Self>> {
+    pub fn new(ctx: Arc<AppContext>) -> Result<ShardRc<Self>> {
         let ui = generated::AppWindow::new()?;
         let w = Self::bind_local(Self {
             app_ctx: ctx,

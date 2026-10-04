@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{
     app_context::AppContext,
     ui::{
@@ -17,14 +19,16 @@ pub mod generated {
     slint::include_modules!();
 }
 
-pub async fn start_ui(ctx: AppContext) -> anyhow::Result<()> {
+static APP_HANDLE: std::sync::OnceLock<ShardRcHandle<App>> = std::sync::OnceLock::new();
+
+pub async fn start_ui(ctx: Arc<AppContext>) -> anyhow::Result<()> {
     let a = App::new(ctx)?;
     a.show().await?;
-
+    APP_HANDLE.set(a.to_handle()).unwrap();
     Ok(())
 }
 
-pub fn start_ui_first_run<F>(run_app: &'static F) -> anyhow::Result<()>
+pub fn start_ui_first_run<F>(run_app: &'static F) -> anyhow::Result<ShardRc<FirstTimeSetup>>
 where
     F: AsyncFn() -> anyhow::Result<()> + Sync + Send + 'static,
 {
@@ -40,5 +44,5 @@ where
 
     a.show()?;
 
-    Ok(())
+    Ok(a)
 }
